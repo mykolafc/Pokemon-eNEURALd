@@ -140,6 +140,8 @@ function readMonData(address)
 	mon.spDefenseIV = (flags >> 25) & 0x1F
 	mon.altAbility = (flags >> 31) & 1
 	flags = ss3[2]
+
+    
 	return mon
 end
 
@@ -188,9 +190,19 @@ function getParty()
 	
 	return party
 end
+
+function getOpponent()
+    local opponent = {}
+    local start = GameSettings.estats
     
+    opponent = readMonData(start)
+    
+    return opponent
+end
 
-
+function getMonType()
+    local types = {}
+    
 
 while true do
     --joypad.set(inputs)
