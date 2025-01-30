@@ -6,6 +6,27 @@ json = require "json"
 PokemonNames = require "PokemonNames"
 ItemNames = require "ItemNames"
 
+Population = 300
+DeltaDisjoint = 2.0
+DeltaWeights = 0.4
+DeltaThreshold = 1.0
+ 
+StaleSpecies = 15
+ 
+MutateConnectionsChance = 0.25
+PerturbChance = 0.90
+CrossoverChance = 0.75
+LinkMutationChance = 2.0
+NodeMutationChance = 0.50
+BiasMutationChance = 0.40
+StepSize = 0.1
+DisableMutationChance = 0.4
+EnableMutationChance = 0.2
+ 
+TimeoutConstant = 20
+ 
+MaxNodes = 1000000
+
 GameSettings = {
 	pstats         = 0x20244EC,
     pcount         = 0x20244E9,
@@ -424,7 +445,7 @@ TypeByMon = {
     ["Deoxys"] = {14},
 }
 
-inputs = {
+buttons = {
     ["A"] = false,
     ["B"] = false,
     ["L"] = false,
@@ -438,8 +459,8 @@ inputs = {
 }
 
 function releaseAllButtons()
-    for key, value in pairs(inputs) do
-        inputs[key] = false
+    for key, value in pairs(buttons) do
+        buttons[key] = false
     end
 end
 
@@ -550,7 +571,7 @@ function readMonData(address)
 	mon.spDefenseIV = (flags >> 25) & 0x1F
 	mon.altAbility = (flags >> 31) & 1
 	flags = ss3[2]
-	
+
 	mon.types = getMonType()
     
 	return mon
@@ -621,9 +642,125 @@ function getMonType(mon)
 
 	return types
 end
-    
+
+-- Function to get data related to the emulator itself
+function getEmu()
+	local emu_data = {
+		frameCount = emu.framecount(),
+		fps = client.get_approx_framerate(),
+		detectedGame = GameSettings.gamename,
+		rngState = Memory.readdword(GameSettings.rng),
+		language = GameSettings.language
+	}
+	
+	return emu_data
+end
+
+function WaitFrames(frames)
+    local emuSpeed = GetEmu().speed
+    local sleepTime = math.max((frames / 60.0) / emuSpeed, 0.02)
+    for i=1, sleepTime do
+		emu.frameadvance()
+	end
+end
+
+
+function pressButton(button)
+	controller = {}
+	releaseAllButtons()
+	controller[button] = true
+	joypad.set(controller)
+	WaitFrames(5)
+	releaseAllButtons()
+end
+
+function getInputs()
+	local inputs = {}
+	
+	inputs["party"] = getParty()
+	inputs["opponent"] = getOpponent()
+	inputs["bag"] = getBag()
+	inputs["emu"] = getEmu()
+	
+	return inputs
+end
+
+function newInnovation()
+	pool.innovation = pool.innovation + 1
+	return pool.innovation
+end
+
+function newPool()
+	local pool = {}
+	pool.species = {}
+	pool.generation = 0
+	pool.innovation = Outputs
+	pool.currentSpecies = 1
+	pool.currentGenome = 1
+	pool.currentFrame = 0
+	pool.maxFitness = 0
+   
+	return pool
+end
+
+function newSpecies()
+	local species = {}
+	species.topFitness = 0
+	species.staleness = 0
+	species.genomes = {}
+	species.averageFitness = 0
+   
+	return species
+end
+
+function newGenome()
+	local genome = {}
+	genome.genes = {}
+	genome.fitness = 0
+	genome.adjustedFitness = 0
+	genome.network = {}
+	genome.maxneuron = 0
+	genome.globalRank = 0
+	genome.mutationRates = {}
+	genome.mutationRates["connections"] = MutateConnectionsChance
+	genome.mutationRates["link"] = LinkMutationChance
+	genome.mutationRates["bias"] = BiasMutationChance
+	genome.mutationRates["node"] = NodeMutationChance
+	genome.mutationRates["enable"] = EnableMutationChance
+	genome.mutationRates["disable"] = DisableMutationChance
+	genome.mutationRates["step"] = StepSize
+   
+	return genome
+end
+	
+function copyGenome(genome)
+	local genome2 = newGenome()
+	for g=1,#genome.genes do
+			table.insert(genome2.genes, copyGene(genome.genes[g]))
+	end
+	genome2.maxneuron = genome.maxneuron
+	genome2.mutationRates["connections"] = genome.mutationRates["connections"]
+	genome2.mutationRates["link"] = genome.mutationRates["link"]
+	genome2.mutationRates["bias"] = genome.mutationRates["bias"]
+	genome2.mutationRates["node"] = genome.mutationRates["node"]
+	genome2.mutationRates["enable"] = genome.mutationRates["enable"]
+	genome2.mutationRates["disable"] = genome.mutationRates["disable"]
+   
+	return genome2
+end
+
+function basicGenome()
+	local genome = newGenome()
+	local innovation = 1
+
+	genome.maxneuron = Inputs
+	mutate(genome)
+   
+	return genome
+end
 
 while true do
-    --joypad.set(inputs)
     emu.frameadvance()
+	console.log(getParty())
+	WaitFrames(10000)
 end
