@@ -6,6 +6,9 @@ json = require "json"
 PokemonNames = require "PokemonNames"
 ItemNames = require "ItemNames"
 
+Inputs = 10
+Outputs = 10
+
 Population = 300
 DeltaDisjoint = 2.0
 DeltaWeights = 0.4
@@ -458,6 +461,7 @@ buttons = {
     ["Start"] = false,
 }
 
+
 function releaseAllButtons()
     for key, value in pairs(buttons) do
         buttons[key] = false
@@ -572,9 +576,13 @@ function readMonData(address)
 	mon.altAbility = (flags >> 31) & 1
 	flags = ss3[2]
 
-	mon.types = getMonType()
+	mon.types = getMonType(mon)
     
 	return mon
+end
+
+function sigmoid(x)
+    return 1 / (1 + math.exp(-x))
 end
 
 -- Function to get the data of an item from the given address
@@ -649,15 +657,15 @@ function getEmu()
 		frameCount = emu.framecount(),
 		fps = client.get_approx_framerate(),
 		detectedGame = GameSettings.gamename,
-		rngState = Memory.readdword(GameSettings.rng),
+		--rngState = Memory.readdword(GameSettings.rng),
 		language = GameSettings.language
 	}
-	
 	return emu_data
 end
 
 function WaitFrames(frames)
-    local emuSpeed = GetEmu().speed
+    local emu = getEmu()
+    local emuSpeed = emu.fps
     local sleepTime = math.max((frames / 60.0) / emuSpeed, 0.02)
     for i=1, sleepTime do
 		emu.frameadvance()
@@ -759,8 +767,140 @@ function basicGenome()
 	return genome
 end
 
+function newGene()
+    local gene = {}
+    gene.into = 0
+    gene.out = 0
+    gene.weight = 0.0
+    gene.enabled = true
+    gene.innovation = 0
+   
+    return gene
+end
+
+function copyGene(gene)
+    local gene2 = newGene()
+    gene2.into = gene.into
+    gene2.out = gene.out
+    gene2.weight = gene.weight
+    gene2.enabled = gene.enabled
+    gene2.innovation = gene.innovation
+   
+    return gene2
+end
+
+function newNeuron()
+    local neuron = {}
+    neuron.incoming = {}
+    neuron.value = 0.0
+   
+    return neuron
+end
+
+function generateNetwork(genome)
+    local network = {}
+    network.neurons = {}
+   
+    for i=1,Inputs do
+            network.neurons[i] = newNeuron()
+    end
+   
+    for o=1,Outputs do
+            network.neurons[MaxNodes+o] = newNeuron()
+    end
+   
+    table.sort(genome.genes, function (a,b)
+            return (a.out < b.out)
+    end)
+    for i=1,#genome.genes do
+            local gene = genome.genes[i]
+            if gene.enabled then
+                    if network.neurons[gene.out] == nil then
+                            network.neurons[gene.out] = newNeuron()
+                    end
+                    local neuron = network.neurons[gene.out]
+                    table.insert(neuron.incoming, gene)
+                    if network.neurons[gene.into] == nil then
+                            network.neurons[gene.into] = newNeuron()
+                    end
+            end
+    end
+   
+    genome.network = network
+end
+
+function evaluateNetwork(network, inputs)
+    table.insert(inputs, 1)
+    if #inputs ~= Inputs then
+            console.writeline("Incorrect number of neural network inputs.")
+            return {}
+    end
+   
+    for i=1,Inputs do
+            network.neurons[i].value = inputs[i]
+    end
+   
+    for _,neuron in pairs(network.neurons) do
+            local sum = 0
+            for j = 1,#neuron.incoming do
+                    local incoming = neuron.incoming[j]
+                    local other = network.neurons[incoming.into]
+                    sum = sum + incoming.weight * other.value
+            end
+           
+            if #neuron.incoming > 0 then
+                    neuron.value = sigmoid(sum)
+            end
+    end
+   
+    local outputs = {}
+    for o=1,Outputs do
+            local button = "P1 " .. ButtonNames[o]
+            if network.neurons[MaxNodes+o].value > 0 then
+                    outputs[button] = true
+            else
+                    outputs[button] = false
+            end
+    end
+   
+    return outputs
+end
+
+function crossover(g1, g2)
+    -- Make sure g1 is the higher fitness genome
+    if g2.fitness > g1.fitness then
+            tempg = g1
+            g1 = g2
+            g2 = tempg
+    end
+
+    local child = newGenome()
+   
+    local innovations2 = {}
+    for i=1,#g2.genes do
+            local gene = g2.genes[i]
+            innovations2[gene.innovation] = gene
+    end
+   
+    for i=1,#g1.genes do
+            local gene1 = g1.genes[i]
+            local gene2 = innovations2[gene1.innovation]
+            if gene2 ~= nil and math.random(2) == 1 and gene2.enabled then
+                    table.insert(child.genes, copyGene(gene2))
+            else
+                    table.insert(child.genes, copyGene(gene1))
+            end
+    end
+   
+    child.maxneuron = math.max(g1.maxneuron,g2.maxneuron)
+   
+    for mutation,rate in pairs(g1.mutationRates) do
+            child.mutationRates[mutation] = rate
+    end
+   
+    return child
+end
+
 while true do
     emu.frameadvance()
-	console.log(getParty())
-	WaitFrames(10000)
-end
+ end

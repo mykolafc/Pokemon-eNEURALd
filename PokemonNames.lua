@@ -1,6 +1,6 @@
 -- Desc: Contains the names of all Pokemon in the game
 -- Author: 40Cakes
-local PokemonNames = {"---", "Bulbasaur", "Ivysaur", "Venusaur", "Charmander", "Charmeleon", "Charizard",
+local PokemonNames = {"Bulbasaur", "Ivysaur", "Venusaur", "Charmander", "Charmeleon", "Charizard",
 		"Squirtle", "Wartortle", "Blastoise", "Caterpie", "Metapod", "Butterfree",
 		"Weedle", "Kakuna", "Beedrill", "Pidgey", "Pidgeotto", "Pidgeot", "Rattata", "Raticate",
 		"Spearow", "Fearow", "Ekans", "Arbok", "Pikachu", "Raichu", "Sandshrew", "Sandslash",
