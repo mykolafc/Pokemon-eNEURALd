@@ -698,6 +698,21 @@ function getBattleState()
 	-- get the data on health, status, etc.
 end
 
+-- Add function to choose the best move / item / switchout 
+function chooseAction()
+	-- get the inputs
+	local inputs = getInputs()
+	local battleState = getBattleState()
+	
+	-- get the outputs from the neural network
+	local outputs = evaluateNetwork(pool.species[pool.currentSpecies].genomes[pool.currentGenome].network, inputs)
+	
+	-- choose the best action based on the outputs
+	-- if the action is a move, press the corresponding button
+	-- if the action is an item, use the item
+	-- if the action is a switchout, switch to the corresponding Pokemon
+end
+
 function newInnovation()
 	pool.innovation = pool.innovation + 1
 	return pool.innovation
