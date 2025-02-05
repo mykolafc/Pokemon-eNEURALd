@@ -7,6 +7,8 @@ PokemonNames = require "PokemonNames"
 ItemNames = require "ItemNames"
 Moves = require "Moves"
 
+--Filename = "save.state"
+
 Inputs = 10
 Outputs = 9
 
@@ -1392,7 +1394,6 @@ end
 
 function initializeRun()
 	savestate.load(Filename);
-	rightmost = 0
 	pool.currentFrame = 0
 	timeout = TimeoutConstant
 	releaseAllButtons()
@@ -1411,6 +1412,11 @@ function evaluateCurrent()
 	selection = evaluateNetwork(genome.network, inputs)
    
 	-- use the corresponding selection function
+	if selection < 5 then
+		useMove(party[1], selection)
+	elseif selection < 9 then
+		switchMon(selection - 3)
+	end
 end
 
 if pool == nil then
@@ -1582,46 +1588,49 @@ while true do
 	if pool.currentFrame%5 == 0 then
 			evaluateCurrent()
 	end
-
-	joypad.set(controller)
-
-	getPositions()
-	if marioX > rightmost then
-			rightmost = marioX
-			timeout = TimeoutConstant
-	end
    
-	timeout = timeout - 1
-   
+	local party = getParty()
+	local opponent = getOpponent()
+	local partyHP = 0
+	local partyTotalHP = 0
+	local fainted = {}
+
+	for i = 1, #party do
+		partyHP = partyHP + party[i].hp
+		partyTotalHP = partyTotalHP + party[i].maxHP
+		if party[i].hp == 0 then
+			table.insert(fainted, i)
+
     -- Change FITNESS FUNCTION here
-	local timeoutBonus = pool.currentFrame / 4
-	if timeout + timeoutBonus <= 0 then
-			local fitness = rightmost - pool.currentFrame / 2
-			if gameinfo.getromname() == "Super Mario World (USA)" and rightmost > 4816 then
-					fitness = fitness + 1000
-			end
-			if gameinfo.getromname() == "Super Mario Bros." and rightmost > 3186 then
-					fitness = fitness + 1000
-			end
-			if fitness == 0 then
-					fitness = -1
-			end
-			genome.fitness = fitness
-		   
-			if fitness > pool.maxFitness then
-					pool.maxFitness = fitness
-					forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-					writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
-			end
-		   
-			console.writeline("Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness)
-			pool.currentSpecies = 1
-			pool.currentGenome = 1
-			while fitnessAlreadyMeasured() do
-					nextGenome()
-			end
-			initializeRun()
+	local fitness = 1000
+	for #fainted do
+			fitness = fitness - 150
 	end
+	fitness = fitness + ((opponent.maxHP - opponent.hp) / opponent.maxHP * 100)
+	if opponent.hp == 0 then
+			fitness = fitness + 4000
+			fitness = fitness + ((partyHP / partyTotalHP) * 500)
+	end
+	
+
+	if fitness == 0 then
+			fitness = -1
+	end
+	genome.fitness = fitness
+	
+	if fitness > pool.maxFitness then
+			pool.maxFitness = fitness
+			forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
+			writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
+	end
+	
+	console.writeline("Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness)
+	pool.currentSpecies = 1
+	pool.currentGenome = 1
+	while fitnessAlreadyMeasured() do
+			nextGenome()
+	end
+	initializeRun()
 
 	local measured = 0
 	local total = 0
