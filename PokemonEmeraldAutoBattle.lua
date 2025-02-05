@@ -5,9 +5,10 @@ dofile("Memory.lua")
 json = require "json"
 PokemonNames = require "PokemonNames"
 ItemNames = require "ItemNames"
+Moves = require "Moves"
 
 Inputs = 10
-Outputs = 10
+Outputs = 9
 
 Population = 300
 DeltaDisjoint = 2.0
@@ -532,14 +533,13 @@ function readMonData(address)
 		ss3[i] = Memory.readdword(address + 32 + pSel[4] * 12 + i * 4) ~ key
 	end
 	
-	mon.species = (ss0[0] & 0xFFFF) + 1
-	mon.name = PokemonNames[mon.species]
+	mon.species = PokemonNames[(ss0[0] & 0xFFFF) + 1]
 	mon.heldItem = ss0[0] >> 16
 	mon.experience = ss0[1]
 	mon.ppBonuses = ss0[2] & 0xFF
 	mon.friendship = (ss0[2] >> 8) & 0xFF
 	
-	mon.moves = {
+	movebytes = {
 		ss1[0] & 0xFFFF,
 		ss1[0] >> 16,
 		ss1[1] & 0xFFFF,
@@ -551,6 +551,10 @@ function readMonData(address)
 		(ss1[2] >> 16) & 0xFF,
 		ss1[2] >> 24
 	}
+
+    for i = 0, 3 do
+        mon.moves[i] = Moves[movebytes[i] + 1]
+    end
 	
 	mon.hpEV = ss2[0] & 0xFF
 	mon.attackEV = (ss2[0] >> 8) & 0xFF
@@ -675,42 +679,57 @@ end
 
 function pressButton(button)
 	controller = {}
-	releaseAllButtons()
 	controller[button] = true
 	joypad.set(controller)
-	WaitFrames(5)
+	WaitFrames(2)
 	releaseAllButtons()
 end
 
 function getInputs()
 	local inputs = {}
-	
-	inputs["party"] = getParty()
+
+    inputs["party"] = getParty()
 	inputs["opponent"] = getOpponent()
 	inputs["bag"] = getBag()
 	inputs["emu"] = getEmu()
-	--add moves as inputs
 	
 	return inputs
 end
 
-function getBattleState()
-	-- get the data on health, status, etc.
+function useMove(mon, move)
+    pressButton("A")
+    WaitFrames(3)
+    if mon.moves[0] = move then
+        pressButton("A")
+    elseif mon.moves[1] = move then
+        pressButton("Right")
+        WaitFrames(3)
+        pressButton("A")
+    elseif mon.moves[2] = move then
+        pressButton("Down")
+        WaitFrames(3)
+        pressButton("A")
+    elseif mon.moves[3] = move then
+        pressButton("Right")
+        WaitFrames(3)
+        pressButton("Down")
+        WaitFrames(3)
+        pressButton("A")
+    end
 end
 
--- Add function to choose the best move / item / switchout 
-function chooseAction()
-	-- get the inputs
-	local inputs = getInputs()
-	local battleState = getBattleState()
-	
-	-- get the outputs from the neural network
-	local outputs = evaluateNetwork(pool.species[pool.currentSpecies].genomes[pool.currentGenome].network, inputs)
-	
-	-- choose the best action based on the outputs
-	-- if the action is a move, press the corresponding button
-	-- if the action is an item, use the item
-	-- if the action is a switchout, switch to the corresponding Pokemon
+function useItem(item)
+    -- Select the item
+end
+
+function switchMon(monPosition)
+    pressButton("Down")
+    WaitFrames(5)
+    for monPosition - 2 do
+        pressButton("Down")
+        WaitFrames(2)
+    end
+    pressButton("A")
 end
 
 function newInnovation()
@@ -873,7 +892,7 @@ function evaluateNetwork(network, inputs)
             local other = network.neurons[incoming.into]
             sum = sum + incoming.weight * other.value
         end
-       
+        
         -- Apply the activation function if the neuron has incoming connections
         if #neuron.incoming > 0 then
             neuron.value = sigmoid(sum)
@@ -881,17 +900,15 @@ function evaluateNetwork(network, inputs)
     end
    
     -- Determine the outputs based on the values of the output neurons
-    local outputs = {}
+    local maxOutput = 0
     for o = 1, Outputs do
-        local button = buttons[o]
-        if network.neurons[MaxNodes + o].value > 0 then
-            outputs[button] = true
-        else
-            outputs[button] = false
+        if network.neurons[MaxNodes + o].value > network.neurons[MaxNodes + maxOutput].value then
+            maxOutput = o
         end
     end
-   
-    return outputs
+
+    return MaxNodes + maxOutput
+
 end
 
 function crossover(g1, g2)
@@ -1391,18 +1408,9 @@ function evaluateCurrent()
 	local genome = species.genomes[pool.currentGenome]
 
 	inputs = getInputs()
-	controller = evaluateNetwork(genome.network, inputs)
+	selection = evaluateNetwork(genome.network, inputs)
    
-	if controller["Left"] and controller["Right"] then
-			controller["Left"] = false
-			controller["Right"] = false
-	end
-	if controller["Up"] and controller["Down"] then
-			controller["Up"] = false
-			controller["Down"] = false
-	end
-
-	joypad.set(controller)
+	-- use the corresponding selection function
 end
 
 if pool == nil then
