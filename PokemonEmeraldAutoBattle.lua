@@ -6,7 +6,7 @@ PokemonNames = require "PokemonNames"
 ItemNames = require "ItemNames"
 Moves = require "PokemonMoves"
 
-Filename = "Trainer Joey Route 102 - Emerald Version (USA, Europe).mGBA.QuickSave0.State"
+Filename = "Champion Battle - Emerald Version (USA, Europe).mGBA.QuickSave4.State"
 
 Inputs = 89
 Outputs = 9
@@ -32,6 +32,8 @@ TimeoutConstant = 500
 PrevHealth = 0
 
 MaxNodes = 1000000
+
+LastFitness = 1000
 
 GameSettings = {
     pstats = 0x20244EC,
@@ -667,7 +669,6 @@ function WaitFrames(frames)
     local emuData = getEmu()
     local emuSpeed = emuData.fps
     local sleepTime = math.ceil(frames / emuSpeed)
-    console.log("Sleeping for " .. sleepTime .. " frames as the emulator is running at " .. emuSpeed .. " fps")
     for i = 1, sleepTime do
         emu.frameadvance()
     end
@@ -735,22 +736,22 @@ end
 
 function useMove(mon, move)
     pressButton("A")
-    WaitFrames(300)
+    WaitFrames(800)
     if mon.moves[0] == move then
         pressButton("A")
     elseif mon.moves[1] == move then
         pressButton("Right")
-        WaitFrames(300)
+        WaitFrames(800)
         pressButton("A")
     elseif mon.moves[2] == move then
         pressButton("Down")
-        WaitFrames(300)
+        WaitFrames(800)
         pressButton("A")
     elseif mon.moves[3] == move then
         pressButton("Right")
-        WaitFrames(300)
+        WaitFrames(800)
         pressButton("Down")
-        WaitFrames(300)
+        WaitFrames(800)
         pressButton("A")
     end
 end
@@ -761,10 +762,10 @@ end
 
 function switchMon(monPosition)
     pressButton("Down")
-    WaitFrames(300)
+    WaitFrames(800)
     for i = 1, (monPosition - 2) do
         pressButton("Down")
-        WaitFrames(300)
+        WaitFrames(800)
     end
     pressButton("A")
 end
@@ -800,7 +801,7 @@ end
 function newGenome()
     local genome = {}
     genome.genes = {}
-    genome.fitness = 0
+    genome.fitness = 1000
     genome.adjustedFitness = 0
     genome.network = {}
     genome.maxneuron = 0
@@ -946,8 +947,6 @@ function evaluateNetwork(network, inputs)
             highestOutput = o
         end
     end
-
-    console.writeline("Highest output: " .. highestOutput)
 
     return highestOutput
 
@@ -1250,6 +1249,10 @@ function weights(genes1, genes2)
         end
     end
 
+    if coincident == 0 then
+        return 10
+    end
+
     return sum / coincident
 end
 
@@ -1487,8 +1490,7 @@ end
 function fitnessAlreadyMeasured()
     local species = pool.species[pool.currentSpecies]
     local genome = species.genomes[pool.currentGenome]
-    console.writeline("Checking if fitness was measured. It is " .. genome.fitness)
-    return genome.fitness ~= 1000
+    return genome.fitness ~= 1000.0
 end
 
 function writeFile(filename)
@@ -1607,6 +1609,14 @@ function playTop()
     return
 end
 
+function timeoutGenome()
+    local species = pool.species[pool.currentSpecies]
+    local genome = species.genomes[pool.currentGenome]
+    genome.fitness = 900
+    timeout = 0
+    console.writeline("Timeout set to " .. timeout)
+end
+
 function onExit()
     forms.destroy(form)
 end
@@ -1620,6 +1630,7 @@ maxFitnessLabel = forms.label(form, "Max Fitness: " .. math.floor(pool.maxFitnes
 showNetwork = forms.checkbox(form, "Show Map", 5, 30)
 showMutationRates = forms.checkbox(form, "Show M-Rates", 5, 52)
 restartButton = forms.button(form, "Restart", initializePool, 5, 77)
+timeoutButton = forms.button(form, "Timeout", timeoutGenome, 80, 77)
 saveButton = forms.button(form, "Save", savePool, 5, 102)
 loadButton = forms.button(form, "Load", loadPool, 80, 102)
 saveLoadFile = forms.textbox(form, Filename .. ".pool", 170, 25, nil, 5, 148)
@@ -1627,11 +1638,30 @@ saveLoadLabel = forms.label(form, "Save/Load:", 5, 129)
 playTopButton = forms.button(form, "Play Top", playTop, 5, 170)
 hideBanner = forms.checkbox(form, "Hide Banner", 5, 190)
 
-while true do
-    local backgroundColor = 0xD0FFFFFF
+function drawUI()
     if not forms.ischecked(hideBanner) then
-        gui.drawBox(0, 0, 300, 26, backgroundColor, backgroundColor)
+        gui.drawBox(0, 0, 300, 26, 0xD0FFFFFF, 0xD0FFFFFF)
+
+        local measured = 0
+        local total = 0
+        for _, species in pairs(pool.species) do
+            for _, genome in pairs(species.genomes) do
+                total = total + 1
+                if genome.fitness ~= 0 then
+                    measured = measured + 1
+                end
+            end
+        end
+
+        gui.drawText(0, 0,
+            "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" ..
+                math.floor(measured / total * 100) .. "%)", 0xFF000000, 11)
+        gui.drawText(0, 12, "Fitness: " .. math.floor(LastFitness), 0xFF000000, 11)
+        gui.drawText(100, 12, "Max Fitness: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
     end
+end
+
+while true do
 
     local species = pool.species[pool.currentSpecies]
     local genome = species.genomes[pool.currentGenome]
@@ -1683,8 +1713,13 @@ while true do
             pool.maxFitness = fitness
             forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
             writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
+            WaitFrames(10000)
         end
 
+        if timeout < 1 then
+            console.writeline("Genome timed out.")
+            nextGenome()
+        end
         while fitnessAlreadyMeasured() do
             nextGenome()
         end
@@ -1703,13 +1738,9 @@ while true do
             end
         end
     end
-    if not forms.ischecked(hideBanner) then
-        gui.drawText(0, 0,
-            "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" ..
-                math.floor(measured / total * 100) .. "%)", 0xFF000000, 11)
-        gui.drawText(0, 12, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
-        gui.drawText(100, 12, "Max Fitness: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
-    end
+    LastFitness = fitness
+
+    drawUI()
 
     pool.currentFrame = pool.currentFrame + 1
     emu.frameadvance()
